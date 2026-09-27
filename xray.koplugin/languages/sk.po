@@ -111,7 +111,7 @@ msgstr "Späť k čítaniu"
 
 # en-hash: 5fcd6ed2b6f2c21bc5c936cf44c36b37
 msgid "beta_channel_desc"
-msgstr "Beta kanál vám umožňuje dostávať predbežné verzie pluginu X-Ray. Tieto verzie obsahujú najnovšie funkcie a opravy chýb, ale môžu byť [B]menej stabilné[/B] ako bežné vydanie."
+msgstr "Beta kanál vám umožňuje dostávať predbežné verzie doplnku X-Ray. Tieto verzie obsahujú najnovšie funkcie a opravy chýb, ale môžu byť [B]menej stabilné[/B] ako bežné vydanie."
 
 # en-hash: 9aac8fedb45eb817ee12a885f1dedc8f
 msgid "beta_disabled"
@@ -843,7 +843,7 @@ msgstr "Zmienky: %s"
 
 # en-hash: 8f7f4c1ce7a4f933663d10543562b096
 msgid "menu_about"
-msgstr "O plugine"
+msgstr "O doplnku"
 
 # en-hash: 92ff32056df3871303587ba7d479c47f
 msgid "menu_ai_settings"
