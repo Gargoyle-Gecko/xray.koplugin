@@ -106,5 +106,126 @@ describe("xray_cachemanager", function()
             assert.is_not_nil(loaded)
             assert.are.equal("Charlie", loaded.characters[1].name)
         end)
+
+        it("serializes and coalesces overlapping async saves cleanly without data loss", function()
+            local UIManager = require("ui/uimanager")
+            local orig_scheduleIn = UIManager.scheduleIn
+            local queue = {}
+            UIManager.scheduleIn = function(self_or_delay, delay_or_fn, maybe_fn)
+                local fn = type(maybe_fn) == "function" and maybe_fn or (type(delay_or_fn) == "function" and delay_or_fn or self_or_delay)
+                table.insert(queue, fn)
+            end
+
+            local data1 = { characters = { { name = "FirstSave" } } }
+            local data2 = { characters = { { name = "SecondSave" } } }
+            local data3 = { characters = { { name = "ThirdSave" } } }
+
+            local cb1_called, cb2_called, cb3_called = false, false, false
+
+            -- First async save starts
+            local s1 = cache_manager:asyncSaveCache(test_book, data1, function(res)
+                cb1_called = res
+            end)
+            assert.is_true(s1)
+            -- Coroutine is scheduled in queue, file is open
+            assert.are.equal(1, #queue)
+
+            -- Second async save is requested while first is active -> gets queued as pending
+            local s2 = cache_manager:asyncSaveCache(test_book, data2, function(res)
+                cb2_called = res
+            end)
+            assert.is_true(s2)
+
+            -- Third async save is requested while first is still active -> coalesces pending with data3
+            local s3 = cache_manager:asyncSaveCache(test_book, data3, function(res)
+                cb3_called = res
+            end)
+            assert.is_true(s3)
+
+            -- Drive the scheduled queue to completion
+            local iterations = 0
+            while #queue > 0 and iterations < 1000 do
+                iterations = iterations + 1
+                local step = table.remove(queue, 1)
+                step()
+            end
+
+            UIManager.scheduleIn = orig_scheduleIn
+
+            assert.is_true(cb1_called)
+            assert.is_true(cb2_called)
+            assert.is_true(cb3_called)
+
+            -- Cache file should exist and have data3 (the latest coalesced data)
+            local loaded = cache_manager:loadCache(test_book)
+            assert.is_not_nil(loaded)
+            assert.are.equal("ThirdSave", loaded.characters[1].name)
+
+            -- Temp file should be cleaned up
+            local f_tmp = io.open(test_cache .. ".tmp", "r")
+            assert.is_nil(f_tmp)
+        end)
+
+        it("handles synchronous saveCache while an async save is active", function()
+            local UIManager = require("ui/uimanager")
+            local orig_scheduleIn = UIManager.scheduleIn
+            local queue = {}
+            UIManager.scheduleIn = function(self_or_delay, delay_or_fn, maybe_fn)
+                local fn = type(maybe_fn) == "function" and maybe_fn or (type(delay_or_fn) == "function" and delay_or_fn or self_or_delay)
+                table.insert(queue, fn)
+            end
+
+            local async_data = { characters = { { name = "AsyncInFlight" } } }
+            local async_cb_called = nil
+            local s1 = cache_manager:asyncSaveCache(test_book, async_data, function(res)
+                async_cb_called = res
+            end)
+            assert.is_true(s1)
+
+            -- Save synchronously while async is in flight
+            local sync_data = { characters = { { name = "SyncOverride" } } }
+            local s2 = cache_manager:saveCache(test_book, sync_data)
+            assert.is_true(s2)
+
+            -- In-flight async callback was notified of cancellation
+            assert.is_false(async_cb_called)
+
+            UIManager.scheduleIn = orig_scheduleIn
+
+            -- Cache file has sync data
+            local loaded = cache_manager:loadCache(test_book)
+            assert.is_not_nil(loaded)
+            assert.are.equal("SyncOverride", loaded.characters[1].name)
+        end)
+
+        it("flushes in-flight and pending async saves synchronously with flushAsyncSaves", function()
+            local UIManager = require("ui/uimanager")
+            local orig_scheduleIn = UIManager.scheduleIn
+            local queue = {}
+            UIManager.scheduleIn = function(self_or_delay, delay_or_fn, maybe_fn)
+                local fn = type(maybe_fn) == "function" and maybe_fn or (type(delay_or_fn) == "function" and delay_or_fn or self_or_delay)
+                table.insert(queue, fn)
+            end
+
+            local data1 = { characters = { { name = "ActiveSave" } } }
+            local data2 = { characters = { { name = "PendingSave" } } }
+            local cb1_called, cb2_called = nil, nil
+
+            cache_manager:asyncSaveCache(test_book, data1, function(res) cb1_called = res end)
+            cache_manager:asyncSaveCache(test_book, data2, function(res) cb2_called = res end)
+
+            -- Flush all saves synchronously
+            cache_manager:flushAsyncSaves()
+
+            UIManager.scheduleIn = orig_scheduleIn
+
+            assert.is_true(cb1_called)
+            assert.is_true(cb2_called)
+
+            -- The loaded cache must contain data2 (the newest pending data)
+            local loaded = cache_manager:loadCache(test_book)
+            assert.is_not_nil(loaded)
+            assert.are.equal("PendingSave", loaded.characters[1].name)
+        end)
     end)
 end)

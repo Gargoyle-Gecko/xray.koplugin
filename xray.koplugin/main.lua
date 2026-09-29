@@ -266,8 +266,12 @@ function XRayPlugin:destroy()
         self.active_mention_scan = nil
     end
 
-    if self.cache_manager and self.cache_manager.cancelAsyncSaves then
-        self.cache_manager:cancelAsyncSaves()
+    if self.cache_manager then
+        if self.cache_manager.flushAsyncSaves then
+            self.cache_manager:flushAsyncSaves()
+        elseif self.cache_manager.cancelAsyncSaves then
+            self.cache_manager:cancelAsyncSaves()
+        end
     end
 
     if self.active_unit_scan_dialog then
