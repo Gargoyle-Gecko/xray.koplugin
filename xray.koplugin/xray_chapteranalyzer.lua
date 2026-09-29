@@ -1284,7 +1284,7 @@ function ChapterAnalyzer:findMentionsInChapter(ui, entity, toc_entry, next_toc_e
             -- Whole word = stem + a short declension suffix (UTF-8 letters count as word bytes)
             local safe_s = t.s:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
             t.pattern = "%f[%a\128-\255]" .. safe_s
-                .. string.rep("[%a\128-\255]?", xray_utils.INFLECTION_MAX_SUFFIX)
+                .. string.rep("[%a\128-\255]?", t.inflect.max or xray_utils.INFLECTION_MAX_SUFFIX)
                 .. "%f[^%a\128-\255]"
             t.next_p = findTerm(t, pos)
         elseif is_single_word then

@@ -140,11 +140,12 @@ function LookupManager:lookupAll(text)
             return words
         end
 
+        local fallback_seen = {}
         for _, cat in ipairs(categories) do
             if cat.list then
                 for _, item in ipairs(cat.list) do
                     -- addIfMatch has already cached _norm_name/_norm_aliases for every item
-                    if item and item._norm_name and item._norm_name ~= "" then
+                    if item and not fallback_seen[item] and item._norm_name and item._norm_name ~= "" then
                         local words = itemWords(item)
                         local all_matched = #query_words > 0
                         for _, qw in ipairs(query_words) do
@@ -161,6 +162,7 @@ function LookupManager:lookupAll(text)
                             end
                         end
                         if all_matched then
+                            fallback_seen[item] = true
                             table.insert(final_results, { item = item, item_type = cat.type, score = 35 })
                         end
                     end

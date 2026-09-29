@@ -1183,7 +1183,7 @@ msgstr "Zatím žádná data o historických osobnostech.\n\nNejprve použijte '
 
 # en-hash: 4c58fb13d107106e3765e3f635e64517
 msgid "no_items"
-msgstr "no_items"
+msgstr "Žádné položky"
 
 # en-hash: 0f1e243d0830d654feef580caac9fd88
 msgid "no_linked_entries"

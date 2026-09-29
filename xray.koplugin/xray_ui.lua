@@ -812,7 +812,9 @@ function M:resolveLanguage(code)
             local book_lang = props.language
             if book_lang then
                 local lang = book_lang:sub(1, 2):lower()
-                if book_lang:lower():find("zh") then lang = "zh_CN"
+                local iso_lang = utils:languageFromIso639_2(book_lang)
+                if iso_lang then lang = iso_lang
+                elseif book_lang:lower():find("zh") then lang = "zh_CN"
                 elseif book_lang:lower():find("pt") then lang = "pt_br"
                 elseif book_lang:lower():find("ja") or book_lang:lower():find("jp") then lang = "ja" end
                 if supported[lang] then return lang end
@@ -1165,7 +1167,9 @@ function M:checkBookLanguageMatch()
     if not book_lang or book_lang == "" then return end
     
     local lang = book_lang:sub(1, 2):lower()
-    if book_lang:find("zh") then lang = "zh_CN"
+    local iso_lang = utils:languageFromIso639_2(book_lang)
+    if iso_lang then lang = iso_lang
+    elseif book_lang:find("zh") then lang = "zh_CN"
     elseif book_lang:find("pt") then lang = "pt_br"
     elseif book_lang:find("ja") or book_lang:find("jp") then lang = "ja" end
     

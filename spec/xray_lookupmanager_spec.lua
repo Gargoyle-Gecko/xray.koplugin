@@ -234,6 +234,7 @@ describe("xray_lookupmanager", function()
             plugin.characters = {
                 { name = "Peter Novák", aliases = {"Peter"} },
                 { name = "Janko Hraško" },
+                { name = "Jana" },
             }
             plugin.historical_figures = {}
             plugin.locations = { { name = "Bratislava" } }
@@ -258,12 +259,24 @@ describe("xray_lookupmanager", function()
             assert.are.equal(1, #r3)
             assert.are.equal("Bratislava", r3[1].item.name)
             assert.are.equal("location", r3[1].item_type)
+
+            local r4 = lm:lookupAll("Janou")
+            assert.are.equal(1, #r4)
+            assert.are.equal("Jana", r4[1].item.name)
+        end)
+
+        it("lists an item once even if it appears in two categories", function()
+            plugin.ai_helper = { current_language = "sk" }
+            plugin.historical_figures = { plugin.characters[1] }
+            local r = lm:lookupAll("Petrovi")
+            assert.are.equal(1, #r)
         end)
 
         it("keeps exact matching for other languages", function()
             plugin.ai_helper = { current_language = "en" }
             assert.are.equal(0, #lm:lookupAll("Petrovi"))
             assert.are.equal(0, #lm:lookupAll("Bratislave"))
+            assert.are.equal(0, #lm:lookupAll("Janou"))
         end)
     end)
 end)
