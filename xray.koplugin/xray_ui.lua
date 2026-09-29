@@ -5731,6 +5731,7 @@ function M:getAIModelSelectionMenu(setting_type)
             id = "chatgpt",
             display_name = "ChatGPT",
             models = {
+                { id = "gpt-6-luna", cost = "paid" },
                 { id = "gpt-5.6-terra", cost = "paid" },
                 { id = "gpt-5.6-luna", cost = "paid" },
                 { id = "gpt-5.5", cost = "paid" },

@@ -44,6 +44,12 @@ describe("AIHelper", function()
             assert.are.equal("max_completion_tokens", param)
         end)
 
+        it("should use max_completion_tokens for gpt-6-luna", function()
+            local param, val = AIHelper:getChatGPTTokenConfig("gpt-6-luna")
+            assert.are.equal("max_completion_tokens", param)
+            assert.are.equal(32000, val)
+        end)
+
         it("should use max_tokens for deepseek/r1 models", function()
             local param, val = AIHelper:getChatGPTTokenConfig("deepseek-reasoner")
             assert.are.equal("max_tokens", param)
