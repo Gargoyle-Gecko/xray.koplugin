@@ -397,7 +397,7 @@ function CacheManager:_startAsyncSave(cache_file, book_path, data, callbacks)
                 f:write("{\n")
                 local child_indent = indent .. "  "
                 for k, v in pairs(obj) do
-                    if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" then
+                    if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" and (type(k) ~= "string" or k:sub(1, 1) ~= "_") then
                         f:write(child_indent)
                         if type(k) == "number" then
                             f:write("[" .. k .. "] = ")
@@ -630,7 +630,7 @@ function CacheManager:serializeToFile(f, obj, indent, seen)
         f:write("{\n")
         local child_indent = indent .. "  "
         for k, v in pairs(obj) do
-            if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" then
+            if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" and (type(k) ~= "string" or k:sub(1, 1) ~= "_") then
                 f:write(child_indent)
                 if type(k) == "string" then
                     if k:match("^[%a_][%w_]*$") then
@@ -673,7 +673,7 @@ function CacheManager:serialize(obj, indent, seen)
         seen[obj] = true
         local parts = {}
         for k, v in pairs(obj) do
-            if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" then
+            if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" and (type(k) ~= "string" or k:sub(1, 1) ~= "_") then
                 local key
                 if type(k) == "string" and k:match("^[%a_][%w_]*$") then
                     key = k .. " = "

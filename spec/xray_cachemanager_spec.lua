@@ -227,5 +227,34 @@ describe("xray_cachemanager", function()
             assert.is_not_nil(loaded)
             assert.are.equal("PendingSave", loaded.characters[1].name)
         end)
+
+        it("does not serialize private underscore fields like _norm_name and _norm_aliases", function()
+            local data = {
+                characters = {
+                    {
+                        name = "Sherlock Holmes",
+                        _norm_name = "sherlock holmes",
+                        aliases = { "Sherlock" },
+                        _norm_aliases = { "sherlock" }
+                    }
+                }
+            }
+            local success = cache_manager:saveCache(test_book, data)
+            assert.is_true(success)
+
+            local f = io.open(test_cache, "r")
+            assert.is_not_nil(f)
+            local content = f:read("*all")
+            f:close()
+
+            assert.is_nil(content:find("_norm_name"))
+            assert.is_nil(content:find("_norm_aliases"))
+
+            local loaded = cache_manager:loadCache(test_book)
+            assert.is_not_nil(loaded)
+            assert.are.equal("Sherlock Holmes", loaded.characters[1].name)
+            assert.is_nil(loaded.characters[1]._norm_name)
+            assert.is_nil(loaded.characters[1]._norm_aliases)
+        end)
     end)
 end)
