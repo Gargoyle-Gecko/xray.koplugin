@@ -1155,8 +1155,18 @@ describe("xray_ui", function()
             assert.is_not_nil(gemini_menu[2].text:find("gemini%-3%.6%-flash"))
 
             local chatgpt_menu = chatgpt_item.sub_item_table_func()
-            assert.is_not_nil(chatgpt_menu[1].text:find("gpt%-5%.6%-terra"))
-            assert.is_not_nil(chatgpt_menu[2].text:find("gpt%-5%.6%-luna"))
+            assert.is_not_nil(chatgpt_menu[1].text:find("gpt%-6%-luna"))
+            assert.is_not_nil(chatgpt_menu[2].text:find("gpt%-5%.6%-terra"))
+            assert.is_not_nil(chatgpt_menu[3].text:find("gpt%-5%.6%-luna"))
+            local original = plugin.ai_helper.setUnifiedModel
+            local selection
+            plugin.ai_helper.setUnifiedModel = function(_, setting, provider, model)
+                selection = { setting, provider, model }
+            end
+            chatgpt_menu[1].callback()
+            plugin.ai_helper.setUnifiedModel = original
+            assert.are.equal("chatgpt", selection[2])
+            assert.are.equal("gpt-6-luna", selection[3])
 
             local claude_menu = claude_item.sub_item_table_func()
             assert.is_not_nil(claude_menu[1].text:find("claude%-sonnet%-5"))
