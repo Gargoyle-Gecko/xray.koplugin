@@ -678,6 +678,14 @@ function M:scanBookForUnits(force)
         return
     end
 
+    if not force then
+        local is_low, avail_kb = xray_utils:isLowMemory(35 * 1024)
+        if is_low then
+            log(string.format("scanBookForUnits: skipped auto scan because available memory is critically low (%d KB < 35 MB)", avail_kb or 0))
+            return
+        end
+    end
+
     -- Book Type Filtering Gate
     if self.getEffectiveBookType then
         local book_type = self:getEffectiveBookType()
@@ -939,9 +947,11 @@ function M:scanBookForUnits(force)
             for _, h in ipairs(hits1) do
                 table.insert(hits, h)
             end
+            hits1 = nil
             for _, h in ipairs(hits2) do
                 table.insert(hits, h)
             end
+            hits2 = nil
 
             -- Deduplicate overlapping hits by end xpointer (keeps the longest match)
             local unique_hits = {}
@@ -952,12 +962,15 @@ function M:scanBookForUnits(force)
                     unique_hits[end_xp] = hit
                 end
             end
+            hits = nil
 
             local deduped_hits = {}
             for _, hit in pairs(unique_hits) do
                 table.insert(deduped_hits, hit)
             end
+            unique_hits = nil
             hits = deduped_hits
+            collectgarbage("step", 200)
 
             local t_start_lua = os.clock()
             log(string.format("scanBookForUnits: checkpoint E — dedup took %.2fs, %d hits", t_start_lua - t2, #hits))
@@ -1241,6 +1254,8 @@ function M:scanBookForUnits(force)
             end
 
             self.unit_xp_matches = xp_matches
+            hits = nil
+            collectgarbage("collect")
             local t3 = os.clock()
             log(string.format("scanBookForUnits: Lua processing took %.2fs, %d unit matches", t3 - t_start_lua, #xp_matches))
             log(string.format("scanBookForUnits: TOTAL %.2fs", t3 - t0))

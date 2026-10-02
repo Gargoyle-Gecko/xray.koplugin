@@ -700,6 +700,7 @@ function AIHelper:makeRequestAsync(request_params, result_file)
     
     local function child_logic(pid, write_fd)
         local child_ok, child_err = pcall(function()
+            collectgarbage("collect")
             self:log("AIHelper Child: Started background process")
             local http_req = require("socket.http")
             local https_req = require("ssl.https")
@@ -732,6 +733,7 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                     }
                     ok, code, response_headers, status = http_req.request(request)
                     response_text = table.concat(response_body)
+                    response_body = nil
                     code_num = tonumber(code)
 
                     if code_num == 503 and attempts < max_attempts then
@@ -910,6 +912,8 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                             f:close()
                             self:log("AIHelper Child: Result written to " .. result_file)
                             success_found = true
+                            response_text = nil
+                            collectgarbage("collect")
                             break
                         else
                             self:log("AIHelper Child: Failed to open result file " .. result_file)
@@ -926,6 +930,8 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                                 f:write(response_text)
                                 f:close()
                             end
+                            response_text = nil
+                            collectgarbage("collect")
                         end
                     end
                 else
@@ -942,12 +948,16 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                             f:write(response_text)
                             f:close()
                         end
+                        response_text = nil
+                        collectgarbage("collect")
                     end
                 end
             end
             socketutil_req:reset_timeout()
         end)
         
+        collectgarbage("collect")
+
         if not child_ok then
             self:log("AIHelper Child: CRITICAL ERROR: " .. tostring(child_err))
             local f = io.open(result_file, "w")
@@ -1072,10 +1082,12 @@ function AIHelper:checkAsyncResult(result_file, expected_pid)
     if not first_newline then return false, "error_parse", "Malformed async result (empty or no newline)" end
     local code_str = content:sub(1, first_newline - 1)
     local rest = content:sub(first_newline + 1)
+    content = nil
     local second_newline = rest:find("\n")
     if not second_newline then return false, "error_parse", "Malformed async result (no provider line)" end
     local provider = rest:sub(1, second_newline - 1)
     local response_text = rest:sub(second_newline + 1)
+    rest = nil
 
     if code_str == "ERROR" then
         return false, "error_api", response_text
@@ -1098,6 +1110,7 @@ function AIHelper:checkAsyncResult(result_file, expected_pid)
 
     -- Parse the response based on provider
     local success, data = pcall(json.decode, response_text)
+    response_text = nil
     if not success or type(data) ~= "table" then return false, "error_parse", "JSON decode failed" end
 
     local ai_text = ""
@@ -1167,8 +1180,11 @@ function AIHelper:checkAsyncResult(result_file, expected_pid)
         return false, "error_parse", "No text in AI response (finishReason=" .. tostring(finish_reason) .. ")"
     end
 
+    data = nil
     local parsed_data, parse_err = self:parseAIResponse(ai_text)
+    ai_text = nil
     if parsed_data then
+        collectgarbage("step", 100)
         return parsed_data
     else
         return false, "error_parse", tostring(parse_err)

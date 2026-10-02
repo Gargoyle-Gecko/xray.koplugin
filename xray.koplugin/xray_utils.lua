@@ -534,4 +534,39 @@ function M:isInflectedForm(base, word)
     return false
 end
 
+function M:getMemoryInfo(meminfo_path)
+    local path = meminfo_path or "/proc/meminfo"
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local info = {}
+    for line in f:lines() do
+        local key, val = line:match("^(%w+):%s+(%d+)%s+kB")
+        if key and val then
+            info[key] = tonumber(val)
+        end
+    end
+    f:close()
+    local total_kb = info["MemTotal"] or 0
+    local free_kb = info["MemFree"] or 0
+    local buffers_kb = info["Buffers"] or 0
+    local cached_kb = info["Cached"] or 0
+    local available_kb = info["MemAvailable"] or (free_kb + buffers_kb + cached_kb)
+    return {
+        total_kb = total_kb,
+        free_kb = free_kb,
+        available_kb = available_kb,
+        buffers_kb = buffers_kb,
+        cached_kb = cached_kb,
+    }
+end
+
+function M:isLowMemory(threshold_kb, meminfo_path)
+    threshold_kb = threshold_kb or (30 * 1024) -- Default 30 MB
+    local mem = self:getMemoryInfo(meminfo_path)
+    if not mem or mem.available_kb <= 0 then
+        return false, nil, nil
+    end
+    return mem.available_kb < threshold_kb, mem.available_kb, mem.total_kb
+end
+
 return M
