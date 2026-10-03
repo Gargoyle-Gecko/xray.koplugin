@@ -1039,7 +1039,8 @@ function M:scanBookForUnits(force)
                 -- Extract prefix part
                 local num_part = matched_text:sub(1, #matched_text - #matched_alias)
                 local p = (hit.prev_text or "") .. num_part
-                p = p:gsub("%s+$", "")
+                -- No-break spaces separate words too
+                p = p:gsub("\194\160", " "):gsub("\226\128\175", " "):gsub("%s+$", "")
                 for _, sep in ipairs(RANGE_SEPS) do
                     p = p:gsub(sep, "-")
                 end

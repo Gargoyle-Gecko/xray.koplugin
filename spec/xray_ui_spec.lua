@@ -847,6 +847,54 @@ describe("xray_ui", function()
             assert.are.equal("8,05 km", plugin.unit_xp_matches[1].converted)
         end)
 
+        it("should parse a Cyrillic written number after a no-break space", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "миль",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "пройшли на\194\160п'ять ",
+                    next_text = ".",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("миль", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_five" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp_five" and unit_end == "xp2" then return "п'ять миль" end
+                if cand == "xp_five" then return "п'ять " end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("п'ять миль", plugin.unit_xp_matches[1].original)
+            assert.are.equal("8,05 km", plugin.unit_xp_matches[1].converted)
+        end)
+
         it("should parse a number followed by a degree sign before 'Fahrenheit'", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do
