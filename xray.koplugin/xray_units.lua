@@ -236,7 +236,7 @@ local function parseNumberText(str)
     local wvals = {}
     local found = false
     for word in str:gmatch("[%S]+") do
-        local clean_w = utf8Lower(word):gsub("[%-,]$", "")
+        local clean_w = utf8Lower(word):gsub("^['\"]+", ""):gsub("['\"]+$", ""):gsub("[%-,]$", "")
         if clean_w ~= "and" and clean_w ~= "a" and clean_w ~= "an" and clean_w ~= "и" and clean_w ~= "und" and clean_w ~= "et" and clean_w ~= "y" then
             local wval = WRITTEN_NUMBERS[clean_w]
             if not wval then return nil end
@@ -1160,7 +1160,7 @@ function M.detectMeasurements(text, direction, enabled_categories, current_lang)
                                         local i_w = #phrase_words
                                         while i_w >= 1 do
                                             local w = phrase_words[i_w]
-                                            local clean_w = utf8Lower(w):gsub("[%-,]$", "")
+                                            local clean_w = utf8Lower(w):gsub("^['\"]+", ""):gsub("['\"]+$", ""):gsub("[%-,]$", "")
                                             if clean_w == "and" or clean_w == "a" or clean_w == "an" or clean_w == "и" or clean_w == "und" or clean_w == "et" or clean_w == "y" or parseNumberText(clean_w) then
                                                 table.insert(valid_words, 1, clean_w)
                                                 i_w = i_w - 1
