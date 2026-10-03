@@ -740,10 +740,13 @@ local VAGUE_BANDS = {
     ["пару"] = {2, 2},
     ["пара"] = {2, 2},
     ["пары"] = {2, 2},
+    -- Ukrainian
+    ["декілька"] = {3, 7},
+    ["кілька"] = {3, 7},
 }
 local VAGUE_ORDER = {
     "a couple of", "a couple", "couple of", "several", "a few", "couple", "some", "few",
-    "несколько", "пару", "пара", "пары"
+    "несколько", "пару", "пара", "пары", "декілька", "кілька"
 }
 local VAGUE_MULTIPLIERS = {
     dozen = 12,
@@ -766,12 +769,24 @@ local VAGUE_MULTIPLIERS = {
     ["миллионов"] = 1000000,
     ["миллиона"] = 1000000,
     ["миллион"] = 1000000,
+    -- Ukrainian
+    ["десятків"] = 10,
+    ["дюжини"] = 12,
+    ["сотень"] = 100,
+    ["сотні"] = 100,
+    ["тисяч"] = 1000,
+    ["тисячі"] = 1000,
+    ["тисяча"] = 1000,
+    ["мільйонів"] = 1000000,
+    ["мільйона"] = 1000000,
+    ["мільйон"] = 1000000,
 }
 
 local function detectVagueQuantifier(prev_text)
     if not prev_text then return nil end
     local p = utf8Lower(prev_text):gsub("%s+$", "")
-    local mword = p:match("([%a\194-\244][\128-\191%a%d]*)$")
+    -- Whole last word, including all UTF-8 letters
+    local mword = p:match("([%a\128-\255%d]+)$")
     local mult = mword and VAGUE_MULTIPLIERS[mword]
     if not mult then return nil end
     
