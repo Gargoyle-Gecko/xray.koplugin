@@ -37,8 +37,25 @@ local RANGE_SEPS = {
     "\227\128\156", -- Wave dash U+301C (〜)
 }
 
+-- Word connectors for ranges ("5 to 10", "п'ять чи шість")
+local RANGE_WORD_CONNECTORS = { "to", "or", "до", "або", "чи", "или" }
+-- Letters (including UTF-8 bytes for Cyrillic), digits and apostrophes
+local WORD_CHARS = "[%a\128-\255%d']"
+
+-- Strip edge quotes, dashes and symbols like ° (ASCII quotes, UTF-8 lead bytes C2 and E2)
+local function strip_edge_symbols(w)
+    local prev
+    repeat
+        prev = w
+        w = w:gsub("^['\"]+", ""):gsub("['\"]+$", "")
+        w = w:gsub("^[\194\226][\128-\191]+", ""):gsub("[\194\226][\128-\191]+$", "")
+    until w == prev
+    return w
+end
+
 local function escape_pattern(alias)
-    local esc = alias:gsub("([%-%+%.%?%*%^%$%(%)%[%]%%%\\])", "%%%1")
+    -- Escape for the regex engine, not Lua patterns
+    local esc = alias:gsub("([%.%+%?%*%^%$%(%)%[%]{}|\\])", "\\%1")
     -- Replace spaces with \s+ to match any whitespace
     esc = esc:gsub("%s+", "\\s+")
     return esc
@@ -866,10 +883,14 @@ function M:scanBookForUnits(force)
                     return false
                 end
 
+                -- With a Cyrillic UI, look for written numbers before Cyrillic aliases only
+                local base_lang = tostring(lang):lower():match("^%a+") or ""
+                local cyrillic_ui = base_lang == "ru" or base_lang == "uk" or base_lang == "sr" or base_lang == "bg" or base_lang == "be"
+
                 local boundary_both = {}
                 local boundary_none = {}
                 for _, alias in ipairs(sorted_aliases) do
-                    if not is_abbreviation(alias) then
+                    if not is_abbreviation(alias) and (not cyrillic_ui or alias:find("[\208\209\210]")) then
                         local esc = escape_pattern(alias)
                         local start_alnum = alias:match("^[%w]")
                         local end_alnum = alias:match("[%w]$")
@@ -1034,37 +1055,43 @@ function M:scanBookForUnits(force)
                 else
                     -- 2. Try prefix_word or prev_text tail
                     -- Try digit range
+                    local lower_p = xray_units.utf8Lower(p)
                     local r1, r2 = p:match("([0-9%.%,]+)%s*[%-–toor]+%s*([0-9%.%,]+)$")
+                    if not r1 then
+                        for _, conn in ipairs(RANGE_WORD_CONNECTORS) do
+                            r1, r2 = lower_p:match("([0-9%.%,]+)%s+" .. conn .. "%s+([0-9%.%,]+)$")
+                            if r1 then break end
+                        end
+                    end
                     if r1 and r2 then
                         val1 = xray_units.parseNumberText(r1)
                         val2 = xray_units.parseNumberText(r2)
                         if val1 and val2 then
-
                             is_range = true
-                            num_str = p:match("([0-9%.%,]+%s*[%-–toor]+%s*[0-9%.%,]+)$") or (r1 .. "-" .. r2)
+                            num_str = r1 .. "-" .. r2
                         end
                     else
                         -- Try written word range
-                        local w1, w2 = p:match("([%a%d%-]+)%s*(?:to|or|%-|and)%s*([%a%d%-]+)$")
+                        local w1, w2, conn
+                        w1, w2 = lower_p:match("(" .. WORD_CHARS .. "+)%s*%-%s*(" .. WORD_CHARS .. "+)$")
+                        if w1 then
+                            conn = "-"
+                        else
+                            for _, c in ipairs(RANGE_WORD_CONNECTORS) do
+                                w1, w2 = lower_p:match("(" .. WORD_CHARS .. "+)%s+" .. c .. "%s+(" .. WORD_CHARS .. "+)$")
+                                if w1 then conn = c; break end
+                            end
+                        end
                         if w1 and w2 then
-                            local phrase_words = {}
-                            for w in p:gmatch("[%a%d%-%.%,]+") do
-                                table.insert(phrase_words, w)
-                            end
-                            -- A range requires two distinct parsed parts separated by a connector.
-                            -- If the whole thing parses as a single compound (like "twenty three"), it's not a range.
-                            local is_compound = false
-                            local combined_val = xray_units.parseNumberText(w1 .. " " .. w2)
-                            if combined_val and not p:find("%s+to%s") and not p:find("%s+or%s") and not p:find("%s+and%s") then
-                                is_compound = true
-                            end
-                            
+                            w1, w2 = strip_edge_symbols(w1), strip_edge_symbols(w2)
+                            -- A hyphenated compound ("twenty-three") is not a range
+                            local is_compound = conn == "-" and xray_units.parseNumberText(w1 .. " " .. w2) ~= nil
                             if not is_compound then
                                 val1 = xray_units.parseNumberText(w1)
                                 val2 = xray_units.parseNumberText(w2)
                                 if val1 and val2 then
                                     is_range = true
-                                    num_str = p:match("([%a%d%-]+%s*(?:to|or|%-|and)%s*[%a%d%-]+)$") or (w1 .. " to " .. w2)
+                                    num_str = w1 .. " " .. conn .. " " .. w2
                                 end
                             end
                         end
@@ -1082,8 +1109,8 @@ function M:scanBookForUnits(force)
                         if not val then
                             -- Single number or written compound (greedy backward accumulation)
                             local words = {}
-                            for w in p:gmatch("[%a%d%-%.%,]+") do
-                                table.insert(words, w)
+                            for w in p:gmatch("[%a\128-\255%d%-%.%,']+") do
+                                table.insert(words, strip_edge_symbols(w))
                             end
                             
                             local valid_words = {}

@@ -656,6 +656,245 @@ describe("xray_ui", function()
             assert.are.equal(0, #plugin.unit_xp_matches)
         end)
 
+        it("should parse a Cyrillic written number instead of an earlier digit", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "дюйми",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "4 фути три ",
+                    next_text = "",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("дюйми", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_three" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp_three" and unit_end == "xp2" then return "три дюйми" end
+                if cand == "xp_three" then return "три" end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("xp_three", plugin.unit_xp_matches[1].start_xp)
+            assert.are.equal("три дюйми", plugin.unit_xp_matches[1].original)
+            assert.are.equal("7,62 cm", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a written number after a curly quote", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "inches",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "mind,” said Alice: “three ",
+                    next_text = " is such",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("inches", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_three" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp1" and unit_end == "xp2" then return "inches" end
+                if cand == "xp_three" then return "“three " end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("7.62 cm", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a written number after an ASCII quote", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "inches",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "He said 'six ",
+                    next_text = "'",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("inches", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            -- The word starts after the quote
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_six" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp_six" and unit_end == "xp2" then return "six inches" end
+                if cand == "xp_six" then return "six " end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("six inches", plugin.unit_xp_matches[1].original)
+            assert.are.equal("15.24 cm", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a Cyrillic written number with an apostrophe after an ASCII quote", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "миль",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "'п'ять ",
+                    next_text = "'",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("миль", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_five" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp_five" and unit_end == "xp2" then return "п'ять миль" end
+                if cand == "xp_five" then return "п'ять " end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("п'ять миль", plugin.unit_xp_matches[1].original)
+            assert.are.equal("8,05 km", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a number followed by a degree sign before 'Fahrenheit'", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "Fahrenheit",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "pound of water to 212° ",
+                    next_text = ".",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("fahrenheit", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                if cand == "xp1" then return "xp_212" end
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp_212" and unit_end == "xp2" then return "212° Fahrenheit" end
+                if cand == "xp_212" then return "212° " end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("xp_212", plugin.unit_xp_matches[1].start_xp)
+            assert.are.equal("212° Fahrenheit", plugin.unit_xp_matches[1].original)
+            assert.are.equal("100 °C", plugin.unit_xp_matches[1].converted)
+        end)
+
         it("should successfully scan '80 degrees Celcius' and populate unit_xp_matches", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do
