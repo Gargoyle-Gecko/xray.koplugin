@@ -641,6 +641,22 @@ describe("xray_units", function()
                 assert.are.equal(1, #res)
                 assert.are.equal("п'яти миль", res[1].original)
                 assert.are.equal("8,05 km", res[1].converted)
+
+                local genitives = {
+                    { "близько ста миль", "ста миль", "160,93 km" },
+                    { "близько однієї милі", "однієї милі", "1,61 km" },
+                    { "понад сорока миль", "сорока миль", "64,37 km" },
+                    { "близько п'ятнадцяти футів", "п'ятнадцяти футів", "4,57 m" },
+                    { "до двохсот п'ятдесяти миль", "двохсот п'ятдесяти миль", "402,34 km" },
+                }
+                for _, c in ipairs(genitives) do
+                    res = xray_units.detectMeasurements(c[1], "to_metric", nil, "uk")
+                    assert.are.equal(1, #res)
+                    assert.are.equal(c[2], res[1].original)
+                    assert.are.equal(c[3], res[1].converted)
+                end
+                assert.are.equal(1, xray_units.parseNumberText("одного"))
+                assert.are.equal(30, xray_units.parseNumberText("тридцяти"))
             end)
         end)
 
