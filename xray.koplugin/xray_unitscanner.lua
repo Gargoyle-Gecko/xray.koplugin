@@ -1073,14 +1073,37 @@ function M:scanBookForUnits(force)
                     else
                         -- Try written word range
                         local w1, w2, conn
-                        w1, w2 = lower_p:match("(" .. WORD_CHARS .. "+)%s*%-%s*(" .. WORD_CHARS .. "+)$")
-                        if w1 then
-                            conn = "-"
-                        else
-                            for _, c in ipairs(RANGE_WORD_CONNECTORS) do
-                                w1, w2 = lower_p:match("(" .. WORD_CHARS .. "+)%s+" .. c .. "%s+(" .. WORD_CHARS .. "+)$")
-                                if w1 then conn = c; break end
+                        for _, c in ipairs(RANGE_WORD_CONNECTORS) do
+                            -- w2 is all words after the last connector ("thirty-five", "three hundred")
+                            local head, tail = lower_p:match("^(.*)%s+" .. c .. "%s+(.-)$")
+                            if tail then
+                                local tail_words = {}
+                                for w in tail:gmatch(WORD_CHARS .. "+") do
+                                    table.insert(tail_words, strip_edge_symbols(w))
+                                end
+                                w2 = table.concat(tail_words, " ")
+                                if not xray_units.parseNumberText(w2) then
+                                    head, w2 = nil, nil
+                                end
                             end
+                            if head then
+                                -- Take the whole compound before the connector ("twenty-five to thirty")
+                                local head_words = {}
+                                for w in head:gmatch(WORD_CHARS .. "+") do
+                                    table.insert(head_words, strip_edge_symbols(w))
+                                end
+                                for i = #head_words, 1, -1 do
+                                    local phrase = table.concat(head_words, " ", i)
+                                    if not xray_units.parseNumberText(phrase) then break end
+                                    w1 = phrase
+                                end
+                                conn = c
+                                break
+                            end
+                        end
+                        if not conn then
+                            w1, w2 = lower_p:match("(" .. WORD_CHARS .. "+)%s*%-%s*(" .. WORD_CHARS .. "+)$")
+                            if w1 then conn = "-" end
                         end
                         if w1 and w2 then
                             w1, w2 = strip_edge_symbols(w1), strip_edge_symbols(w2)

@@ -895,6 +895,138 @@ describe("xray_ui", function()
             assert.are.equal("100 °C", plugin.unit_xp_matches[1].converted)
         end)
 
+        it("should parse a compound first number in a written range", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "miles",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "walked twenty-five to thirty ",
+                    next_text = ".",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("miles", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp1" and unit_end == "xp2" then return "miles" end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("40.23–48.28 km", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a hyphenated second number in a written range", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "miles",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "walked twenty-five to thirty-five ",
+                    next_text = ".",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("miles", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp1" and unit_end == "xp2" then return "miles" end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("40.23–56.33 km", plugin.unit_xp_matches[1].converted)
+        end)
+
+        it("should parse a multi-word second number in a written range", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local mock_hits = {
+                {
+                    matched_text = "feet",
+                    start = "xp1",
+                    ["end"] = "xp2",
+                    prev_text = "walked two hundred or three hundred ",
+                    next_text = ".",
+                }
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("feet", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                return cand
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, cand, unit_end)
+                if cand == "xp1" and unit_end == "xp2" then return "feet" end
+                return ""
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("60.96–91.44 m", plugin.unit_xp_matches[1].converted)
+        end)
+
         it("should successfully scan '80 degrees Celcius' and populate unit_xp_matches", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do
