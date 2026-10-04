@@ -865,16 +865,49 @@ function M:scanBookForUnits(force)
             local digit_units = "(" .. table.concat(digit_parts, "|") .. ")"
             local pat_digit = "(([0-9]+[0-9\\.,]*|\\.[0-9]+)\\s*" .. digit_units .. ")"
 
-            -- Build pat_word only if unit_scan_written_numbers is enabled (defaulting to enabled on high power, disabled on low power devices)
-            local pat_word = nil
+            -- Build word patterns only if unit_scan_written_numbers is enabled (defaulting to enabled on high power, disabled on low power devices)
+            local MAX_REGEX_LEN = 4000
+            local word_chunks = {}
+            local split_on_error = false
             local scan_written = settings.unit_scan_written_numbers
             if scan_written == nil then
                 scan_written = not xray_utils.isLowPowerForScan()
             end
+
+            local function build_word_pattern(items)
+                local boundary_both = {}
+                local boundary_none = {}
+                for _, item in ipairs(items) do
+                    table.insert(item.bounded and boundary_both or boundary_none, item.esc)
+                end
+                local word_parts = {}
+                if #boundary_both > 0 then
+                    table.insert(word_parts, "\\b(" .. table.concat(boundary_both, "|") .. ")\\b")
+                end
+                if #boundary_none > 0 then
+                    table.insert(word_parts, "(" .. table.concat(boundary_none, "|") .. ")")
+                end
+                return "(" .. table.concat(word_parts, "|") .. ")"
+            end
+
             if scan_written then
+                -- With a Cyrillic UI, look for written numbers before Cyrillic aliases only
+                local base_lang = tostring(lang):lower():match("^%a+") or ""
+                local cyrillic_ui = base_lang == "ru" or base_lang == "uk" or base_lang == "sr" or base_lang == "bg" or base_lang == "be"
+
                 local function is_abbreviation(alias)
                     local clean = alias:gsub("%s+", "")
-                    if clean:match("%d") or clean:find("[°º/%./]") then
+                    if clean:match("%d") or clean:find("[/%.]") then
+                        return true
+                    end
+                    for _, sym in ipairs({ "°", "º", "²", "³" }) do
+                        if clean:find(sym, 1, true) then
+                            return true
+                        end
+                    end
+                    -- The old byte class also drops names with some UTF-8 letters (Cyrillic а, к);
+                    -- other UIs keep it so their patterns stay under the limit
+                    if not cyrillic_ui and clean:find("[°º]") then
                         return true
                     end
                     if #clean < 4 and clean ~= "cup" then
@@ -883,46 +916,42 @@ function M:scanBookForUnits(force)
                     return false
                 end
 
-                -- With a Cyrillic UI, look for written numbers before Cyrillic aliases only
-                local base_lang = tostring(lang):lower():match("^%a+") or ""
-                local cyrillic_ui = base_lang == "ru" or base_lang == "uk" or base_lang == "sr" or base_lang == "bg" or base_lang == "be"
-
-                local boundary_both = {}
-                local boundary_none = {}
+                local word_items = {}
                 for _, alias in ipairs(sorted_aliases) do
                     if not is_abbreviation(alias) and (not cyrillic_ui or alias:find("[\208\209\210]")) then
-                        local esc = escape_pattern(alias)
-                        local start_alnum = alias:match("^[%w]")
-                        local end_alnum = alias:match("[%w]$")
-                        if start_alnum and end_alnum then
-                            table.insert(boundary_both, esc)
-                        else
-                            table.insert(boundary_none, esc)
-                        end
+                        table.insert(word_items, {
+                            esc = escape_pattern(alias),
+                            bounded = alias:match("^[%w]") ~= nil and alias:match("[%w]$") ~= nil,
+                        })
                     end
                 end
-                
-                local word_parts = {}
-                if #boundary_both > 0 then
-                    table.insert(word_parts, "\\b(" .. table.concat(boundary_both, "|") .. ")\\b")
-                end
-                if #boundary_none > 0 then
-                    table.insert(word_parts, "(" .. table.concat(boundary_none, "|") .. ")")
-                end
-                if #word_parts > 0 then
-                    pat_word = "(" .. table.concat(word_parts, "|") .. ")"
+
+                if cyrillic_ui then
+                    -- Cyrillic aliases don't fit in one pattern, so search them in chunks
+                    split_on_error = true
+                    local cur, len = {}, 0
+                    for _, item in ipairs(word_items) do
+                        if len > 0 and len + #item.esc + 1 > MAX_REGEX_LEN - 100 then
+                            table.insert(word_chunks, cur)
+                            cur, len = {}, 0
+                        end
+                        table.insert(cur, item)
+                        len = len + #item.esc + 1
+                    end
+                    if #cur > 0 then
+                        table.insert(word_chunks, cur)
+                    end
+                elseif #word_items > 0 then
+                    local pat_word = build_word_pattern(word_items)
+                    if #pat_word > MAX_REGEX_LEN then
+                        log("scanBookForUnits: word pattern too large (" .. #pat_word .. " chars), skipping word pass safety check")
+                    else
+                        table.insert(word_chunks, word_items)
+                    end
                 end
             end
-            
+
             log("scanBookForUnits: pat_digit=[" .. tostring(pat_digit) .. "]")
-            if pat_word then
-                log("scanBookForUnits: pat_word=[" .. tostring(pat_word) .. "]")
-                local MAX_REGEX_LEN = 4000
-                if #pat_word > MAX_REGEX_LEN then
-                    log("scanBookForUnits: word pattern too large (" .. #pat_word .. " chars), skipping word pass safety check")
-                    pat_word = nil
-                end
-            end
 
             log("scanBookForUnits: checkpoint A — pre findAllText digit")
             progress_msg:reportProgress(15)
@@ -936,18 +965,6 @@ function M:scanBookForUnits(force)
             log(string.format("scanBookForUnits: checkpoint B — post findAllText digit (took %.2fs), %d hits", t1 - t0, ok1 and hits1 and #hits1 or 0))
             progress_msg:reportProgress(55)
 
-            local ok2, hits2
-            local t2 = t1
-            if pat_word then
-                log("scanBookForUnits: checkpoint C — pre findAllText word")
-                ok2, hits2 = pcall(function()
-                    return doc:findAllText(pat_word, true, 5, 5000, true)
-                end)
-                t2 = os.clock()
-                log(string.format("scanBookForUnits: checkpoint D — post findAllText word (took %.2fs), %s hits", t2 - t1, tostring(ok2 and hits2 and #hits2 or 0)))
-            end
-            progress_msg:reportProgress(85)
-
             if not ok1 then
                 log("scanBookForUnits: digit findAllText pcall failed: " .. tostring(hits1))
                 hits1 = {}
@@ -955,14 +972,53 @@ function M:scanBookForUnits(force)
                 hits1 = {}
             end
 
-            if pat_word and (not ok2 or not hits2) then
-                if not ok2 then
-                    log("scanBookForUnits: word findAllText pcall failed (non-fatal): " .. tostring(hits2))
-                end
-                hits2 = {}
-            elseif not hits2 then
-                hits2 = {}
+            local function regex_error()
+                if not doc.getAndClearRegexSearchError then return 0 end
+                local ok, code = pcall(doc.getAndClearRegexSearchError, doc)
+                return ok and tonumber(code) or 0
             end
+
+            local hits2 = {}
+            -- In chunks, split a chunk in half and search again if the regex engine reports an error
+            local function run_word_chunk(items, depth)
+                local pat_word = build_word_pattern(items)
+                log("scanBookForUnits: pat_word=[" .. pat_word .. "]")
+                regex_error()
+                local tp = os.clock()
+                local ok, res = pcall(function()
+                    return doc:findAllText(pat_word, true, 5, 5000, true)
+                end)
+                local err = regex_error()
+                log(string.format("scanBookForUnits: word chunk (%d aliases, %d chars, depth %d) took %.2fs, %d hits, regex_error=%d",
+                    #items, #pat_word, depth, os.clock() - tp, ok and type(res) == "table" and #res or 0, err))
+                if not ok then
+                    log("scanBookForUnits: word findAllText pcall failed (non-fatal): " .. tostring(res))
+                end
+                if split_on_error and (err ~= 0 or not ok) and #items > 1 then
+                    local mid = math.floor(#items / 2)
+                    local left, right = {}, {}
+                    for i, item in ipairs(items) do
+                        table.insert(i <= mid and left or right, item)
+                    end
+                    run_word_chunk(left, depth + 1)
+                    run_word_chunk(right, depth + 1)
+                    return
+                end
+                if ok and type(res) == "table" then
+                    for _, h in ipairs(res) do
+                        table.insert(hits2, h)
+                    end
+                end
+            end
+
+            log("scanBookForUnits: checkpoint C — pre findAllText word, " .. #word_chunks .. " chunk(s)")
+            for idx, items in ipairs(word_chunks) do
+                run_word_chunk(items, 0)
+                progress_msg:reportProgress(55 + math.floor(30 * idx / #word_chunks))
+            end
+            local t2 = os.clock()
+            log(string.format("scanBookForUnits: checkpoint D — post findAllText word (took %.2fs), %d hits", t2 - t1, #hits2))
+            progress_msg:reportProgress(85)
 
             local hits = {}
             for _, h in ipairs(hits1) do
@@ -985,8 +1041,16 @@ function M:scanBookForUnits(force)
             end
             hits = nil
 
-            local deduped_hits = {}
+            -- Chunks can match the same text with a shorter alias; keep the longest match per start
+            local by_start = {}
             for _, hit in pairs(unique_hits) do
+                if not by_start[hit.start] or #hit.matched_text > #by_start[hit.start].matched_text then
+                    by_start[hit.start] = hit
+                end
+            end
+
+            local deduped_hits = {}
+            for _, hit in pairs(by_start) do
                 table.insert(deduped_hits, hit)
             end
             unique_hits = nil

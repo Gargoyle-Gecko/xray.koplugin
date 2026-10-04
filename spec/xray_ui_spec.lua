@@ -966,6 +966,85 @@ describe("xray_ui", function()
             assert.are.equal("0,91 m", plugin.unit_xp_matches[1].converted)
         end)
 
+        it("should search all Cyrillic aliases for written numbers in chunks under the length limit", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local word_patterns = {}
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if not pat:find("[0-9]", 1, true) then
+                    table.insert(word_patterns, pat)
+                end
+                return {}
+            end
+
+            plugin:scanBookForUnits()
+            assert.is_true(#word_patterns > 1)
+            local searched = {}
+            for _, pat in ipairs(word_patterns) do
+                assert.is_true(#pat < 4000)
+                for alias in pat:gmatch("[^|()]+") do
+                    searched[alias] = true
+                end
+            end
+            for _, alias in ipairs({ "фут", "фута", "футів", "акри", "галонів", "квадратних\\s+футів", "кубічних\\s+дюймів" }) do
+                assert.is_true(searched[alias], alias)
+            end
+        end)
+
+        it("should split a word chunk in half on a regex error", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local word_calls = 0
+            local regex_err = 0
+            plugin.ui.document.getAndClearRegexSearchError = function()
+                local err = regex_err
+                regex_err = 0
+                return err
+            end
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if not pat:find("[0-9]", 1, true) then
+                    word_calls = word_calls + 1
+                    -- Fail the first word chunk only
+                    if word_calls == 1 then
+                        regex_err = 111
+                    end
+                end
+                return {}
+            end
+
+            plugin:scanBookForUnits()
+            -- The failed chunk is searched again as two halves
+            assert.is_true(word_calls >= 4)
+        end)
+
         it("should parse a number followed by a degree sign before 'Fahrenheit'", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do
