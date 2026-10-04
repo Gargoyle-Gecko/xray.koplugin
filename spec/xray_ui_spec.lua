@@ -966,6 +966,76 @@ describe("xray_ui", function()
             assert.are.equal("0,91 m", plugin.unit_xp_matches[1].converted)
         end)
 
+        it("should skip a Cyrillic unit at the end of a longer word", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local texts = {
+                ["/body/p[1]/text()"] = "бюджет п'ять мільярдів гривень",
+                ["/body/p[2]/text()"] = "пройшов п'ять ярдів далі",
+            }
+            -- prev_text ends at the previous word, as in crengine
+            local mock_hits = {
+                {
+                    matched_text = "ярдів",
+                    start = "/body/p[1]/text().17",
+                    ["end"] = "/body/p[1]/text().22",
+                    prev_text = "бюджет п'ять ",
+                    next_text = "гривень",
+                },
+                {
+                    matched_text = "ярдів",
+                    start = "/body/p[2]/text().14",
+                    ["end"] = "/body/p[2]/text().19",
+                    prev_text = "пройшов п'ять ",
+                    next_text = "далі",
+                },
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("ярдів", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            local function parse(xp)
+                local node, offset = xp:match("^(.*)%.(%d+)$")
+                return node, tonumber(offset)
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                return cand
+            end
+            plugin.ui.document.getNextVisibleChar = function(self_doc, xp)
+                local node, offset = parse(xp)
+                return node .. "." .. (offset + 1)
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, from, to)
+                local node, from_offset = parse(from)
+                local _, to_offset = parse(to)
+                local chars = {}
+                for ch in texts[node]:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+                    table.insert(chars, ch)
+                end
+                return table.concat(chars, "", from_offset + 1, to_offset)
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("/body/p[2]/text().14", plugin.unit_xp_matches[1].start_xp)
+        end)
+
         it("should search all Cyrillic aliases for written numbers in chunks under the length limit", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do

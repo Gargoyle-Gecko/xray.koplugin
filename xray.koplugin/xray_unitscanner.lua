@@ -1090,6 +1090,15 @@ function M:scanBookForUnits(force)
                 return ok_t and type(text) == "string" and text:find("^[%a\208-\211]") ~= nil
             end
 
+            -- True if a letter precedes start_xp in the same text node
+            local function starts_mid_word(start_xp)
+                local n = tonumber(start_xp:match("%.(%d+)$"))
+                if not n or n == 0 then return false end
+                local prev_xp = start_xp:gsub("%.%d+$", "." .. (n - 1))
+                local ok, text = pcall(doc.getTextFromXPointers, doc, prev_xp, start_xp)
+                return ok and type(text) == "string" and (text:find("%a$") or text:find("[\208-\211][\128-\191]$")) ~= nil
+            end
+
             for _, hit in ipairs(hits) do
                 local is_range = false
                 local val, num_str
@@ -1110,11 +1119,13 @@ function M:scanBookForUnits(force)
                 end
                 matched_alias = matched_alias or lower_matched
 
-                -- Cyrillic aliases have no \b, so skip a match inside a longer word ("акробати")
-                local inside_word = matched_alias:find("[\208-\211][\128-\191]$") and continues_word(hit["end"])
-
                 -- Extract prefix part
                 local num_part = matched_text:sub(1, #matched_text - #matched_alias)
+
+                -- Cyrillic aliases have no \b, so skip a match inside a longer word ("акробати", "мільярди")
+                local inside_word = (matched_alias:find("[\208-\211][\128-\191]$") and continues_word(hit["end"]))
+                    or (num_part == "" and matched_alias:find("^[\208-\211]") and starts_mid_word(hit.start))
+
                 local p = (hit.prev_text or "") .. num_part
                 -- No-break spaces separate words too
                 p = p:gsub("\194\160", " "):gsub("\226\128\175", " "):gsub("%s+$", "")
