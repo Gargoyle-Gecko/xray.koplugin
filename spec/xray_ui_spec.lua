@@ -895,6 +895,77 @@ describe("xray_ui", function()
             assert.are.equal("8,05 km", plugin.unit_xp_matches[1].converted)
         end)
 
+        it("should skip a Cyrillic unit inside a longer word", function()
+            local xray_unitscanner = require("xray_unitscanner")
+            for k, v in pairs(xray_unitscanner) do
+                plugin[k] = v
+            end
+            plugin.loc.getLanguage = function() return "uk" end
+
+            plugin.ai_helper = {
+                settings = {
+                    unit_converter_enabled = true,
+                    unit_underline_enabled = true,
+                    unit_underline_style = "solid",
+                    unit_conversion_direction = "to_metric",
+                    unit_scan_written_numbers = true,
+                }
+            }
+
+            local texts = {
+                ["/body/p[1]/text()"] = "на поле вийшли три футболісти з м'ячем",
+                ["/body/p[2]/text()"] = "яма завглибшки три фути а потім",
+            }
+            -- next_text starts at the next word, as in crengine
+            local mock_hits = {
+                {
+                    matched_text = "фут",
+                    start = "/body/p[1]/text().19",
+                    ["end"] = "/body/p[1]/text().22",
+                    prev_text = "на поле вийшли три ",
+                    next_text = "з м'ячем",
+                },
+                {
+                    matched_text = "фути",
+                    start = "/body/p[2]/text().19",
+                    ["end"] = "/body/p[2]/text().23",
+                    prev_text = "яма завглибшки три ",
+                    next_text = "а потім",
+                },
+            }
+            plugin.ui.document.findAllText = function(self_doc, pat)
+                if pat:find("фут", 1, true) and not pat:find("[0-9]", 1, true) then
+                    return mock_hits
+                end
+                return {}
+            end
+            local function parse(xp)
+                local node, offset = xp:match("^(.*)%.(%d+)$")
+                return node, tonumber(offset)
+            end
+            plugin.ui.document.getPrevVisibleWordStart = function(self_doc, cand)
+                return cand
+            end
+            plugin.ui.document.getNextVisibleChar = function(self_doc, xp)
+                local node, offset = parse(xp)
+                return node .. "." .. (offset + 1)
+            end
+            plugin.ui.document.getTextFromXPointers = function(self_doc, from, to)
+                local node, from_offset = parse(from)
+                local _, to_offset = parse(to)
+                local chars = {}
+                for ch in texts[node]:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+                    table.insert(chars, ch)
+                end
+                return table.concat(chars, "", from_offset + 1, to_offset)
+            end
+
+            plugin:scanBookForUnits()
+            assert.are.equal(1, #plugin.unit_xp_matches)
+            assert.are.equal("/body/p[2]/text().19", plugin.unit_xp_matches[1].start_xp)
+            assert.are.equal("0,91 m", plugin.unit_xp_matches[1].converted)
+        end)
+
         it("should parse a number followed by a degree sign before 'Fahrenheit'", function()
             local xray_unitscanner = require("xray_unitscanner")
             for k, v in pairs(xray_unitscanner) do

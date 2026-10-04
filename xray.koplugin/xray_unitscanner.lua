@@ -1016,6 +1016,16 @@ function M:scanBookForUnits(force)
             end
 
 
+            -- True if a letter follows end_xp in the same text node (next_text starts at the next word)
+            local function continues_word(end_xp)
+                local ok, next_xp = pcall(doc.getNextVisibleChar, doc, end_xp)
+                if not ok or not next_xp or next_xp:gsub("%.%d+$", "") ~= end_xp:gsub("%.%d+$", "") then
+                    return false
+                end
+                local ok_t, text = pcall(doc.getTextFromXPointers, doc, end_xp, next_xp)
+                return ok_t and type(text) == "string" and text:find("^[%a\208-\211]") ~= nil
+            end
+
             for _, hit in ipairs(hits) do
                 local is_range = false
                 local val, num_str
@@ -1035,6 +1045,9 @@ function M:scanBookForUnits(force)
                     end
                 end
                 matched_alias = matched_alias or lower_matched
+
+                -- Cyrillic aliases have no \b, so skip a match inside a longer word ("акробати")
+                local inside_word = matched_alias:find("[\208-\211][\128-\191]$") and continues_word(hit["end"])
 
                 -- Extract prefix part
                 local num_part = matched_text:sub(1, #matched_text - #matched_alias)
@@ -1183,7 +1196,7 @@ function M:scanBookForUnits(force)
                     end
                 end
                 
-                if val or (val1 and val2) then
+                if not inside_word and (val or (val1 and val2)) then
                     local matched_unit = matched_alias
                     local u = xray_units.UNIT_LOOKUP and xray_units.UNIT_LOOKUP[matched_unit]
                     if not u then
