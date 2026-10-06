@@ -467,6 +467,9 @@ function XRayPlugin:onReaderReady()
                             self:scanBookForUnits()
                         end
                     end)
+                else
+                    -- Auto-scan off: only restore underlines from an existing cache
+                    self:scanBookForUnits()
                 end
             end
         end
